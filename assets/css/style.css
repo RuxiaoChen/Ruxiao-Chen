@@ -1507,7 +1507,9 @@ textarea.form-input::-webkit-resizer { display: none; }
    */
 
   .project-img, .blog-banner-box { border-radius: 16px; }
-
+  .link-color {
+    color: var(--white-2);
+   }
   .blog-posts-list { gap: 30px; }
 
   .blog-content { padding: 25px; }
