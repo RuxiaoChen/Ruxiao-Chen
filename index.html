@@ -23,6 +23,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+  <!-- Leaflet Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 
 <body>
@@ -313,6 +321,31 @@
 
 
         </section>
+
+        <!--
+          - visitor stats (collapsible)
+        -->
+        <div class="visitor-widget">
+          <button class="visitor-toggle" id="visitor-toggle">
+            <ion-icon name="analytics-outline"></ion-icon>
+            <span>Site Analytics</span>
+            <ion-icon name="chevron-down-outline" class="toggle-icon"></ion-icon>
+          </button>
+          <div class="visitor-content" id="visitor-content">
+            <div class="visitor-stats-row">
+              <div class="stat-item">
+                <span class="stat-number" id="total-visits">-</span>
+                <span class="stat-label">Total</span>
+              </div>
+              <div class="stat-divider"></div>
+              <div class="stat-item">
+                <span class="stat-number" id="month-visits">-</span>
+                <span class="stat-label">Last 30 Days</span>
+              </div>
+            </div>
+            <div id="visitor-map"></div>
+          </div>
+        </div>
 
       </article>
 
@@ -723,7 +756,6 @@
       </article>
 
 
-
       <!--
         - #CONTACT
       -->
@@ -743,6 +775,270 @@
   -->
   <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
+
+  <!--
+    - Visitor Tracking Script
+  -->
+  <script>
+    // ============================================
+    // FIREBASE CONFIGURATION
+    // ============================================
+    // TODO: Replace with your own Firebase config
+    // 1. Go to https://console.firebase.google.com/
+    // 2. Create a new project (or use existing)
+    // 3. Go to Project Settings > General > Your apps > Add app > Web
+    // 4. Copy the firebaseConfig object and paste below
+    // 5. Go to Realtime Database > Create Database > Start in test mode
+    // 6. Update rules to allow read/write (for testing)
+    // ============================================
+    
+    const firebaseConfig = {
+    apiKey: "AIzaSyDS9mIl6Rnjo29Gb06TEHbpNdAyc-Jr9Us",
+    authDomain: "personal-web-2a4ab.firebaseapp.com",
+    databaseURL: "https://personal-web-2a4ab-default-rtdb.firebaseio.com",
+    projectId: "personal-web-2a4ab",
+    storageBucket: "personal-web-2a4ab.firebasestorage.app",
+    messagingSenderId: "471129681148",
+    appId: "1:471129681148:web:cc80a0b61a2e0733c33b79",
+    measurementId: "G-0B6X84NT9X"
+  };
+
+    // Check if Firebase is configured
+    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
+
+    let database = null;
+    if (isFirebaseConfigured) {
+      firebase.initializeApp(firebaseConfig);
+      database = firebase.database();
+    }
+
+    // ============================================
+    // VISITOR TRACKING FUNCTIONS
+    // ============================================
+
+    // Get visitor's IP and location info
+    async function getVisitorInfo() {
+      try {
+        // Try ipapi.co first (HTTPS, free tier: 1000 requests/day)
+        let response = await fetch('https://ipapi.co/json/');
+        let data = await response.json();
+        
+        if (data && data.ip && !data.error) {
+          return {
+            ip: data.ip,
+            country: data.country_name,
+            countryCode: data.country_code,
+            region: data.region,
+            city: data.city,
+            lat: data.latitude,
+            lon: data.longitude,
+            timezone: data.timezone,
+            isp: data.org,
+            org: data.org,
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            language: navigator.language,
+            screenResolution: `${screen.width}x${screen.height}`
+          };
+        }
+        
+        // Fallback to ip-api.com (HTTP only for free tier)
+        response = await fetch('http://ip-api.com/json/?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query');
+        data = await response.json();
+        
+        if (data.status === 'success') {
+          return {
+            ip: data.query,
+            country: data.country,
+            countryCode: data.countryCode,
+            region: data.regionName,
+            city: data.city,
+            lat: data.lat,
+            lon: data.lon,
+            timezone: data.timezone,
+            isp: data.isp,
+            org: data.org,
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            language: navigator.language,
+            screenResolution: `${screen.width}x${screen.height}`
+          };
+        }
+        return null;
+      } catch (error) {
+        console.error('Error fetching visitor info:', error);
+        return null;
+      }
+    }
+
+    // Save visitor to Firebase
+    async function saveVisitor(info) {
+      if (!isFirebaseConfigured || !database || !info) return;
+      
+      try {
+        const visitorsRef = database.ref('visitors');
+        await visitorsRef.push(info);
+        console.log('Visitor recorded successfully');
+      } catch (error) {
+        console.error('Error saving visitor:', error);
+      }
+    }
+
+    // ============================================
+    // MAP AND STATISTICS
+    // ============================================
+    
+    let visitorMap = null;
+    let allVisitors = [];
+    let mapInitialized = false;
+
+    // Initialize the map
+    function initMap() {
+      if (mapInitialized || !document.getElementById('visitor-map')) return;
+      
+      visitorMap = L.map('visitor-map', {
+        center: [20, 0],
+        zoom: 1.5,
+        minZoom: 1,
+        maxZoom: 6,
+        zoomControl: false,
+        attributionControl: false
+      });
+
+      // Use CartoDB dark tiles
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        subdomains: 'abcd',
+        maxZoom: 19
+      }).addTo(visitorMap);
+
+      mapInitialized = true;
+    }
+
+    // Add markers to map
+    function addMarkersToMap() {
+      if (!visitorMap || allVisitors.length === 0) return;
+
+      // Group visitors by approximate location (to avoid too many markers)
+      const locationGroups = {};
+      
+      allVisitors.forEach(v => {
+        if (v.lat && v.lon) {
+          // Round to 1 decimal place to group nearby visitors
+          const key = `${Math.round(v.lat)},${Math.round(v.lon)}`;
+          if (!locationGroups[key]) {
+            locationGroups[key] = {
+              lat: v.lat,
+              lon: v.lon,
+              city: v.city,
+              country: v.country,
+              count: 0
+            };
+          }
+          locationGroups[key].count++;
+        }
+      });
+
+      // Add markers
+      Object.values(locationGroups).forEach(loc => {
+        const size = Math.min(8 + loc.count * 2, 20); // Size based on visit count
+        
+        const marker = L.circleMarker([loc.lat, loc.lon], {
+          radius: size,
+          fillColor: '#ffda6b',
+          color: '#fff',
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 0.8
+        }).addTo(visitorMap);
+
+        marker.bindPopup(`
+          <strong>${loc.city || 'Unknown'}, ${loc.country || 'Unknown'}</strong><br>
+          ${loc.count} visit${loc.count > 1 ? 's' : ''}
+        `);
+      });
+    }
+
+    // Update statistics display
+    function updateStats() {
+      // Total visits
+      document.getElementById('total-visits').textContent = allVisitors.length;
+
+      // Last 30 days visits
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const monthVisits = allVisitors.filter(v => new Date(v.timestamp) >= thirtyDaysAgo).length;
+      document.getElementById('month-visits').textContent = monthVisits;
+    }
+
+    // Load visitor data
+    let dataLoaded = false;
+    
+    async function loadVisitorData() {
+      if (dataLoaded) {
+        // Just refresh map size if already loaded
+        if (visitorMap) visitorMap.invalidateSize();
+        return;
+      }
+      
+      if (!isFirebaseConfigured || !database) {
+        document.getElementById('total-visits').textContent = '-';
+        document.getElementById('month-visits').textContent = '-';
+        return;
+      }
+
+      try {
+        const visitorsRef = database.ref('visitors');
+        const snapshot = await visitorsRef.once('value');
+        
+        allVisitors = [];
+        snapshot.forEach((child) => {
+          allVisitors.push({ id: child.key, ...child.val() });
+        });
+        
+        // Sort by timestamp descending
+        allVisitors.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        updateStats();
+        initMap();
+        addMarkersToMap();
+        dataLoaded = true;
+        
+      } catch (error) {
+        console.error('Error loading visitors:', error);
+      }
+    }
+
+    // ============================================
+    // INITIALIZE TRACKING
+    // ============================================
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Get visitor info and save to Firebase
+      const visitorInfo = await getVisitorInfo();
+      
+      if (isFirebaseConfigured && visitorInfo) {
+        await saveVisitor(visitorInfo);
+      }
+      
+      // Toggle visitor widget
+      const toggleBtn = document.getElementById('visitor-toggle');
+      const content = document.getElementById('visitor-content');
+      
+      if (toggleBtn && content) {
+        toggleBtn.addEventListener('click', () => {
+          toggleBtn.classList.toggle('active');
+          content.classList.toggle('show');
+          
+          // Load data when first opened
+          if (content.classList.contains('show')) {
+            setTimeout(() => {
+              loadVisitorData();
+            }, 100);
+          }
+        });
+      }
+    });
+  </script>
 
 </body>
 

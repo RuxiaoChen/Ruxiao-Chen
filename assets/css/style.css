@@ -1885,3 +1885,134 @@ textarea.form-input::-webkit-resizer { display: none; }
   .timeline-text { max-width: 700px; }
 
 }
+
+
+
+/*-----------------------------------*\
+  #VISITOR WIDGET (Collapsible)
+\*-----------------------------------*/
+
+.visitor-widget {
+  margin-top: 30px;
+}
+
+.visitor-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--light-gray);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 8px 0;
+  transition: color 0.2s;
+}
+
+.visitor-toggle:hover {
+  color: var(--light-gray-70);
+}
+
+.visitor-toggle ion-icon {
+  font-size: 1rem;
+}
+
+.visitor-toggle .toggle-icon {
+  transition: transform 0.3s;
+}
+
+.visitor-toggle.active .toggle-icon {
+  transform: rotate(180deg);
+}
+
+.visitor-content {
+  display: none;
+  background: var(--border-gradient-onyx);
+  border-radius: 12px;
+  padding: 15px;
+  margin-top: 10px;
+  animation: fadeIn 0.3s ease;
+}
+
+.visitor-content.show {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.visitor-stats-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 25px;
+  margin-bottom: 12px;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-number {
+  display: block;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--orange-yellow-crayola);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--light-gray);
+}
+
+.stat-divider {
+  width: 1px;
+  height: 30px;
+  background: var(--jet);
+}
+
+#visitor-map {
+  width: 100%;
+  height: 180px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1a1a2e;
+}
+
+/* Dark theme for Leaflet map */
+.leaflet-container {
+  background: #1a1a2e;
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--eerie-black-2);
+  color: var(--white-2);
+  border-radius: 8px;
+  box-shadow: var(--shadow-2);
+}
+
+.leaflet-popup-tip {
+  background: var(--eerie-black-2);
+}
+
+.leaflet-popup-content {
+  margin: 8px 10px;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 580px) {
+  .visitor-stats-row {
+    gap: 18px;
+  }
+  
+  .stat-number {
+    font-size: 1.2rem;
+  }
+  
+  #visitor-map {
+    height: 150px;
+  }
+}
